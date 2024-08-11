@@ -53,6 +53,6 @@ jobs:
     - name: Deploy to EC2 via CodeDeploy
       run: |
         aws deploy create-deployment \
-          --application-name your-codedeploy-app-name \
-          --deployment-group-name your-codedeploy-deployment-group-name \
+          --application-name test_for_code_deploy \
+          --deployment-group-name test_for_code_deploy \
           --s3-location bucket=test-s3-for-code-deploy,bundleType=tar,key=deploy/deploy.tar.gz
