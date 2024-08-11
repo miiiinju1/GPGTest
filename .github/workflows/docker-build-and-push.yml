@@ -1,4 +1,4 @@
-name: Build, Push Docker Image to ECR, and Deploy to EC2 via CodeDeploy
+name: Build, Package, and Deploy to EC2 via CodeDeploy
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-push-deploy:
+  build-package-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,32 +30,29 @@ jobs:
       run: |
         aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com
 
-    - name: Build and push Docker image
-      id: build-image
+    - name: Build Docker image
       run: |
-        # Define the image name
         IMAGE_NAME=ecr_for_code_deploy
-
-        # Build the Docker image
         docker build -t $IMAGE_NAME .
-
-        # Tag the Docker image with the ECR repository URI
         docker tag $IMAGE_NAME:latest 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com/$IMAGE_NAME:latest
 
-        # Push the image to ECR
-        docker push 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com/$IMAGE_NAME:latest
-
-    - name: Upload appspec.yml and scripts to S3
+    - name: Push Docker image to ECR
       run: |
-        # Package appspec.yml and scripts
-        zip -r deploy.zip appspec.yml scripts/
+        docker push 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com/ecr_for_code_deploy:latest
 
-        # Upload to S3
-        aws s3 cp deploy.zip s3://your-s3-bucket-name/deploy.zip
+    - name: Create deployment package
+      run: |
+        mkdir -p package
+        cp -r appspec.yml scripts/ package/
+        tar -czvf deploy.tar.gz -C package .
+
+    - name: Upload deployment package to S3
+      run: |
+        aws s3 cp deploy.tar.gz s3://test-s3-for-code-deploy/deploy/deploy.tar.gz
 
     - name: Deploy to EC2 via CodeDeploy
       run: |
         aws deploy create-deployment \
           --application-name your-codedeploy-app-name \
           --deployment-group-name your-codedeploy-deployment-group-name \
-          --s3-location bucket=your-s3-bucket-name,bundleType=zip,key=deploy.zip
+          --s3-location bucket=test-s3-for-code-deploy,bundleType=tar,key=deploy/deploy.tar.gz
