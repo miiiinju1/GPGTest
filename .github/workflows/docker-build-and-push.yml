@@ -1,4 +1,4 @@
-name: Build and Push Docker Image to ECR
+name: Build, Push Docker Image to ECR, and Deploy to EC2 via CodeDeploy
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - main
 
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,11 +19,16 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
 
-    - name: Log in to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
       with:
-        region: ap-northeast-2  
+        access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        region: ap-northeast-2
+
+    - name: Log in to Amazon ECR
+      run: |
+        aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com
 
     - name: Build and push Docker image
       id: build-image
@@ -35,13 +40,22 @@ jobs:
         docker build -t $IMAGE_NAME .
 
         # Tag the Docker image with the ECR repository URI
-        docker tag $IMAGE_NAME:latest ${{ steps.login-ecr.outputs.registry }}/$IMAGE_NAME:latest
+        docker tag $IMAGE_NAME:latest 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com/$IMAGE_NAME:latest
 
         # Push the image to ECR
-        docker push ${{ steps.login-ecr.outputs.registry }}/$IMAGE_NAME:latest
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        docker push 938652538677.dkr.ecr.ap-northeast-2.amazonaws.com/$IMAGE_NAME:latest
 
-    - name: Image digest
-      run: echo "The image digest is ${{ steps.build-image.outputs.digest }}"
+    - name: Upload appspec.yml and scripts to S3
+      run: |
+        # Package appspec.yml and scripts
+        zip -r deploy.zip appspec.yml scripts/
+
+        # Upload to S3
+        aws s3 cp deploy.zip s3://your-s3-bucket-name/deploy.zip
+
+    - name: Deploy to EC2 via CodeDeploy
+      run: |
+        aws deploy create-deployment \
+          --application-name your-codedeploy-app-name \
+          --deployment-group-name your-codedeploy-deployment-group-name \
+          --s3-location bucket=your-s3-bucket-name,bundleType=zip,key=deploy.zip
