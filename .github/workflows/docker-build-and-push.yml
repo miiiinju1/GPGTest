@@ -23,13 +23,13 @@ jobs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
       with:
-        region: us-east-1  # 필요한 AWS 리전으로 변경
+        region: ap-northeast-2  
 
     - name: Build and push Docker image
       id: build-image
       run: |
         # Define the image name
-        IMAGE_NAME=<your-ecr-repo-name>
+        IMAGE_NAME=ecr_for_code_deploy
 
         # Build the Docker image
         docker build -t $IMAGE_NAME .
